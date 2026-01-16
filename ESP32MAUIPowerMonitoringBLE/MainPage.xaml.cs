@@ -2,26 +2,31 @@
 using Plugin.BLE.Abstractions.Contracts;
 using Plugin.BLE.Abstractions.EventArgs;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 
 namespace ESP32MAUIPowerMonitoringBLE
 {
     public partial class MainPage : ContentPage
     {
-        private readonly IBluetoothLE _ble = CrossBluetoothLE.Current;
-        private readonly IAdapter _adapter = CrossBluetoothLE.Current.Adapter;
+        private readonly IBluetoothLE ble = CrossBluetoothLE.Current;
+        private readonly IAdapter adapter = CrossBluetoothLE.Current.Adapter;
 
-        private IDevice? _device;
-        private IService? _service;
-        private ICharacteristic? _characteristic;
+        private IDevice? connectedDevice;
+        private IService? service;
+        private ICharacteristic? characteristic;
 
-        private readonly List<Button> _connectButtons = new();
-        private readonly Guid _serviceUuid = Guid.Parse("12345678-1234-1234-1234-1234567890ab");
-        private readonly Guid _characteristicUuid = Guid.Parse("abcd1234-5678-90ab-cdef-1234567890ab");
+        private readonly List<Button> connectButtons = new();
+
+        private readonly Guid serviceUuid = Guid.Parse("12345678-1234-1234-1234-1234567890ab");
+        private readonly Guid characteristicUuid = Guid.Parse("abcd1234-5678-90ab-cdef-1234567890ab");
 
         public ObservableCollection<IDevice> DiscoveredDevices { get; } = new();
-        public ObservableCollection<ChartData> LiveData { get; } = new ObservableCollection<ChartData>();
+        public ObservableCollection<ChartData> LiveData { get; } = new();
 
+        // Buffer for incoming BLE data (handles chunks, truncation, out-of-order)
+        private readonly StringBuilder bleBuffer = new StringBuilder(2048);
 
         public MainPage()
         {
@@ -30,9 +35,14 @@ namespace ESP32MAUIPowerMonitoringBLE
 
             Unloaded += (_, _) =>
             {
-                _adapter.DeviceDiscovered -= OnDeviceDiscovered;
-                if (_device != null)
-                    _ = _adapter.DisconnectDeviceAsync(_device);
+                adapter.DeviceDiscovered -= OnDeviceDiscovered;
+                if (connectedDevice != null)
+                {
+                    if (characteristic != null)
+                        characteristic.ValueUpdated -= OnCharacteristicValueUpdated;
+                    _ = adapter.DisconnectDeviceAsync(connectedDevice);
+                }
+                bleBuffer.Clear();
             };
         }
 
@@ -52,34 +62,35 @@ namespace ESP32MAUIPowerMonitoringBLE
         private async Task<bool> RequestPermissionsAsync()
         {
             var loc = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
-            var ble = await Permissions.RequestAsync<BleRuntimePermissions>();
-            return loc == PermissionStatus.Granted && ble == PermissionStatus.Granted;
+            var blePerm = await Permissions.RequestAsync<BleRuntimePermissions>();
+            return loc == PermissionStatus.Granted && blePerm == PermissionStatus.Granted;
         }
 
         private async void OnStartScanClicked(object sender, EventArgs e)
         {
             if (!await RequestPermissionsAsync()) return;
-            if (_ble.State != BluetoothState.On)
+
+            if (ble.State != BluetoothState.On)
             {
-                await DisplayAlertAsync("Bluetooth", "Enable Bluetooth", "OK");
+                await DisplayAlert("Bluetooth", "Please enable Bluetooth", "OK");
                 return;
             }
 
             DiscoveredDevices.Clear();
-            _connectButtons.Clear();
+            connectButtons.Clear();
             StatusLabel.Text = "Scanning (10s)...";
 
-            _adapter.DeviceDiscovered += OnDeviceDiscovered;
+            adapter.DeviceDiscovered += OnDeviceDiscovered;
 
             try
             {
-                await _adapter.StartScanningForDevicesAsync(
+                await adapter.StartScanningForDevicesAsync(
                     cancellationToken: new CancellationTokenSource(10000).Token);
                 StatusLabel.Text = "Scan complete";
             }
             finally
             {
-                _adapter.DeviceDiscovered -= OnDeviceDiscovered;
+                adapter.DeviceDiscovered -= OnDeviceDiscovered;
             }
         }
 
@@ -97,60 +108,88 @@ namespace ESP32MAUIPowerMonitoringBLE
 
         private async void OnConnectClicked(object sender, EventArgs e)
         {
-            if (sender is not Button btn || btn.CommandParameter is not IDevice dev)
+            if (sender is not Button btn || btn.CommandParameter is not IDevice device)
                 return;
 
             try
             {
-                if (_device != null)
+                if (connectedDevice != null)
                 {
-                    if (_characteristic != null)
-                        _characteristic.ValueUpdated -= OnValueUpdated;
+                    // Disconnect
+                    if (characteristic != null)
+                        characteristic.ValueUpdated -= OnCharacteristicValueUpdated;
 
-                    await _adapter.DisconnectDeviceAsync(_device);
-                    _device = null;
+                    await adapter.DisconnectDeviceAsync(connectedDevice);
+
+                    connectedDevice = null;
+                    service = null;
+                    characteristic = null;
+                    bleBuffer.Clear();
 
                     btn.Text = "Connect";
                     StatusLabel.Text = "Disconnected";
-                    // disable the dasbord
-                    //ToggleSwitch.IsToggled = false;
-                    //ToggleSwitch.IsEnabled = false;
                     return;
                 }
 
-                await _adapter.ConnectToKnownDeviceAsync(dev.Id);
-                _device = dev;
+                // Connect
+                await adapter.ConnectToKnownDeviceAsync(device.Id);
+                connectedDevice = device;
 
-                _service = await _device.GetServiceAsync(_serviceUuid)
+                service = await connectedDevice.GetServiceAsync(serviceUuid)
                     ?? throw new Exception("Service not found");
 
-                _characteristic = await _service.GetCharacteristicAsync(_characteristicUuid)
+                characteristic = await service.GetCharacteristicAsync(characteristicUuid)
                     ?? throw new Exception("Characteristic not found");
 
-                _characteristic.ValueUpdated += OnValueUpdated;
-                await _characteristic.StartUpdatesAsync();
+                characteristic.ValueUpdated += OnCharacteristicValueUpdated;
+                await characteristic.StartUpdatesAsync();
 
-                // enable power meter dashboard
-                //ToggleSwitch.IsEnabled = true;
+                // Attempt to negotiate higher MTU (Android only - very helpful)
+                try
+                {
+                    int mtu = await connectedDevice.RequestMtuAsync(185); // returns negotiated value
+                    Debug.WriteLine($"Negotiated MTU: {mtu} bytes (usable payload ~{mtu - 3})");
+
+                    if (mtu >= 100)
+                        StatusLabel.Text = $"Connected – Good MTU ({mtu})";
+                    else
+                        StatusLabel.Text = $"Connected – Low MTU ({mtu}) – data may truncate";
+                }
+                catch (Exception mtuEx)
+                {
+                    Debug.WriteLine($"MTU request failed: {mtuEx.Message} → using default (~23 bytes)");
+                    StatusLabel.Text = "Connected (default MTU ~20 bytes usable)";
+                }
 
                 btn.Text = "Disconnect";
-                StatusLabel.Text = $"Connected to {dev.Name}";
+                StatusLabel.Text = $"Connected to {device.Name}";
             }
             catch (Exception ex)
             {
                 StatusLabel.Text = $"Error: {ex.Message}";
+                Debug.WriteLine($"Connection failed: {ex}");
             }
         }
 
-        private void OnValueUpdated(object? sender, CharacteristicUpdatedEventArgs e)
+        private void OnCharacteristicValueUpdated(object? sender, CharacteristicUpdatedEventArgs e)
         {
-            var text = System.Text.Encoding.UTF8.GetString(e.Characteristic.Value ?? Array.Empty<byte>());
+            if (e.Characteristic?.Value == null || e.Characteristic.Value.Length == 0)
+                return;
+
+            var bytes = e.Characteristic.Value;
+            var receivedText = Encoding.UTF8.GetString(bytes);
+
+            var hex = BitConverter.ToString(bytes).Replace("-", " ");
+            Debug.WriteLine($"BLE RX | len={bytes.Length,3} | text='{receivedText}'");
 
             MainThread.BeginInvokeOnMainThread(() =>
             {
                 try
                 {
-                    var reading = JsonSerializer.Deserialize<PowerReading>(text);
+                    // Since full JSON usually arrives → try direct parse first
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var reading = JsonSerializer.Deserialize<PowerReading>(receivedText, options);
+
                     if (reading != null)
                     {
                         VoltageLabel.Text = reading.Voltage.ToString("F1");
@@ -159,39 +198,43 @@ namespace ESP32MAUIPowerMonitoringBLE
                         EnergyLabel.Text = reading.Energy.ToString("F3");
                         PowerFactorLabel.Text = reading.PowerFactor.ToString("F2");
 
-                        // Optional: update chart here if you have LiveData collection
-                        // LiveData.Add(new ChartData { Value = DateTime.Now.Second, Size = reading.Power });
+                        StatusLabel.Text = $"Updated {DateTime.Now:T}";
+                        bleBuffer.Clear(); // no need to buffer if parse succeeded
+                        return;
                     }
 
-                    StatusLabel.Text = $"Updated at {DateTime.Now:T}";
+                    // Fallback to buffer logic only if direct parse fails
+                    bleBuffer.Append(receivedText);
+                    // ... keep your existing while loop for safety ...
                 }
-                catch (JsonException)
+                catch (Exception ex)
                 {
-                    StatusLabel.Text = $"Invalid JSON: {text}";
+                    Debug.WriteLine($"Receive/parse error: {ex.Message}");
+                    StatusLabel.Text = "Parse error – check debug output";
                 }
             });
         }
 
         private async void OnToggleSwitchToggled(object sender, ToggledEventArgs e)
         {
-            if (_characteristic == null) return;
+            if (characteristic == null) return;
 
             var cmd = e.Value ? "ON" : "OFF";
             try
             {
-                await _characteristic.WriteAsync(System.Text.Encoding.UTF8.GetBytes(cmd));
+                await characteristic.WriteAsync(Encoding.UTF8.GetBytes(cmd));
                 StatusLabel.Text = $"Sent: {cmd}";
             }
             catch (Exception ex)
             {
-                StatusLabel.Text = $"Toggle error: {ex.Message}";
+                StatusLabel.Text = $"Write error: {ex.Message}";
             }
         }
 
         private void OnConnectButtonLoaded(object sender, EventArgs e)
         {
-            if (sender is Button b && !_connectButtons.Contains(b))
-                _connectButtons.Add(b);
+            if (sender is Button b && !connectButtons.Contains(b))
+                connectButtons.Add(b);
         }
     }
 }
