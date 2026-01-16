@@ -1,0 +1,170 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             Title="Power Monitoring System"
+             xmlns:chart="clr-namespace:Syncfusion.Maui.Charts;assembly=Syncfusion.Maui.Charts"
+             x:Class="ESP32MAUIPowerMonitoringBLE.MainPage">
+
+    <Grid RowDefinitions="Auto,Auto,*">
+
+        <!-- ===================== -->
+        <!-- BLE SCAN & CONNECT -->
+        <!-- ===================== -->
+        <VerticalStackLayout Grid.Row="0"
+                     Padding="10"
+                     Spacing="10">
+
+            <Label x:Name="StatusLabel"/>
+            <Button Text="Start Scan"
+                    Clicked="OnStartScanClicked"
+            x:Name="ScanButton"/>
+
+            <Label Text="Discovered Power Meter devices:"
+           FontSize="16"/>
+
+            <CollectionView ItemsSource="{Binding DiscoveredDevices}">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Padding="5"
+                      ColumnDefinitions="*,Auto">
+
+                            <Label Grid.Column="0"
+                           Text="{Binding Name}"
+                           VerticalOptions="Center"/>
+
+                            <Button Grid.Column="1"
+                            Text="Connect"
+                            CommandParameter="{Binding .}"
+                            Clicked="OnConnectClicked"
+                            Loaded="OnConnectButtonLoaded"/>
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </VerticalStackLayout>
+        
+        <!-- ===================== -->
+        <!-- TOP DASHBOARD -->
+        <!-- ===================== -->
+        <Grid Grid.Row="1"
+              Padding="10"
+              ColumnSpacing="10"
+              RowSpacing="10">
+
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Voltage -->
+            <Border Grid.Row="0" Grid.Column="0" Padding="12" Stroke="Gray" StrokeThickness="1">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="12"/>
+                </Border.StrokeShape>
+                <VerticalStackLayout>
+                    <Label Text="Voltage (V)" FontSize="12" Opacity="0.7"/>
+                    <Label x:Name="VoltageLabel" Text="0.0" FontSize="20" FontAttributes="Bold"/>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Current -->
+            <Border Grid.Row="0" Grid.Column="1" Padding="12" Stroke="Gray" StrokeThickness="1">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="12"/>
+                </Border.StrokeShape>
+                <VerticalStackLayout>
+                    <Label Text="Current (A)" FontSize="12" Opacity="0.7"/>
+                    <Label x:Name="CurrentLabel" Text="0.00" FontSize="20" FontAttributes="Bold"/>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Frequency -->
+            <Border Grid.Row="0" Grid.Column="2" Padding="12" Stroke="Gray" StrokeThickness="1">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="12"/>
+                </Border.StrokeShape>
+                <VerticalStackLayout>
+                    <Label Text="Frequency (Hz)" FontSize="12" Opacity="0.7"/>
+                    <Label x:Name="FrequencyLabel" Text="0.0" FontSize="20" FontAttributes="Bold"/>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Energy -->
+            <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Padding="12" Stroke="Gray" StrokeThickness="1">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="12"/>
+                </Border.StrokeShape>
+                <VerticalStackLayout>
+                    <Label Text="Energy (kWh)" FontSize="12" Opacity="0.7"/>
+                    <Label x:Name="EnergyLabel" Text="0.00" FontSize="20" FontAttributes="Bold"/>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Power Factor -->
+            <Border Grid.Row="1" Grid.Column="2" Padding="12" Stroke="Gray" StrokeThickness="1">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="12"/>
+                </Border.StrokeShape>
+                <VerticalStackLayout>
+                    <Label Text="Power Factor" FontSize="12" Opacity="0.7"/>
+                    <Label x:Name="PowerFactorLabel" Text="0.00" FontSize="20" FontAttributes="Bold"/>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- ===================== -->
+        <!-- CHART -->
+        <!-- ===================== -->
+        <chart:SfCartesianChart Grid.Row="2"
+                                x:Name="realTimeChart"
+                                HorizontalOptions="Fill"
+                                VerticalOptions="Fill">
+            <chart:SfCartesianChart.ZoomPanBehavior>
+                <chart:ChartZoomPanBehavior EnablePinchZooming="True" EnableDirectionalZooming="True" MaximumZoomLevel="5"/>
+            </chart:SfCartesianChart.ZoomPanBehavior>
+
+            <chart:SfCartesianChart.Title>
+                <Label Text="Live Power Monitoring" Margin="0,0,0,5" 
+HorizontalOptions="Fill" HorizontalTextAlignment="Center" 
+VerticalOptions="Center" FontSize="16"/>
+            </chart:SfCartesianChart.Title>
+
+            <chart:SfCartesianChart.XAxes>
+                <chart:NumericalAxis ShowMajorGridLines="false" EdgeLabelsDrawingMode="Center" EnableAutoIntervalOnZooming="False">
+                    <chart:NumericalAxis.Title>
+                        <chart:ChartAxisTitle TextColor="{AppThemeBinding Light=Black, Dark=White}" Text="Time (seconds)"/>
+                    </chart:NumericalAxis.Title>
+                    <chart:NumericalAxis.LabelStyle>
+                        <chart:ChartAxisLabelStyle TextColor="{AppThemeBinding Light=Black, Dark=White}"/>
+                    </chart:NumericalAxis.LabelStyle>
+                </chart:NumericalAxis>
+            </chart:SfCartesianChart.XAxes>
+
+            <chart:SfCartesianChart.YAxes>
+                <chart:NumericalAxis ShowMajorGridLines="false" Minimum="0" AutoScrollingDelta="1000">
+                    <chart:NumericalAxis.LabelStyle>
+                        <chart:ChartAxisLabelStyle TextColor="{AppThemeBinding Light=Black, Dark=White}" />
+                    </chart:NumericalAxis.LabelStyle>
+                    <chart:NumericalAxis.Title>
+                        <chart:ChartAxisTitle TextColor="{AppThemeBinding Light=Black, Dark=White}" Text="Power (Watts)"/>
+                    </chart:NumericalAxis.Title>
+                </chart:NumericalAxis>
+            </chart:SfCartesianChart.YAxes>
+
+            <chart:SfCartesianChart.Series>
+                <chart:FastLineSeries ItemsSource="{Binding LiveData}"
+               EnableAntiAliasing="True" 
+               XBindingPath="Value" YBindingPath="Size"
+               Fill="{AppThemeBinding Light={StaticResource series4Light30}, Dark={StaticResource series4Dark30}}"
+               StrokeWidth="2">
+                </chart:FastLineSeries>
+            </chart:SfCartesianChart.Series>
+        </chart:SfCartesianChart>
+    </Grid>
+</ContentPage>

@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+	<application
+        android:allowBackup="true"
+        android:icon="@mipmap/appicon"
+        android:supportsRtl="true">
+	</application>
+
+	<!-- Internet and network access -->
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+	<uses-permission android:name="android.permission.INTERNET" />
+
+	<!-- Bluetooth permissions (legacy, for Android 11 and below) -->
+	<uses-permission android:name="android.permission.BLUETOOTH" />
+	<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+
+	<!-- Android 12+ Bluetooth runtime permissions - REMOVED neverForLocation to allow runtime prompt -->
+	<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+	<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+	<!-- Location permissions (required for BLE scanning on all Android versions) -->
+	<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+	<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+	<!-- Optional: For Android 13+ if needed for nearby devices (some OEMs) -->
+	<!-- <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" /> -->
+</manifest>
