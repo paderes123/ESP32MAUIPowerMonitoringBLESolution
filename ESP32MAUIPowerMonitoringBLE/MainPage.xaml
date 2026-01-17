@@ -63,7 +63,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- Voltage -->
-            <Border Grid.Row="0" Grid.Column="0" Padding="12" Stroke="Gray" StrokeThickness="1">
+            <Border Grid.Row="0" Grid.Column="0" Padding="12" Stroke="Magenta" StrokeThickness="1">
                 <Border.StrokeShape>
                     <RoundRectangle CornerRadius="12"/>
                 </Border.StrokeShape>
@@ -74,7 +74,7 @@
             </Border>
 
             <!-- Current -->
-            <Border Grid.Row="0" Grid.Column="1" Padding="12" Stroke="Gray" StrokeThickness="1">
+            <Border Grid.Row="0" Grid.Column="1" Padding="12" Stroke="Cyan" StrokeThickness="1">
                 <Border.StrokeShape>
                     <RoundRectangle CornerRadius="12"/>
                 </Border.StrokeShape>
@@ -85,7 +85,7 @@
             </Border>
 
             <!-- Frequency -->
-            <Border Grid.Row="0" Grid.Column="2" Padding="12" Stroke="Gray" StrokeThickness="1">
+            <Border Grid.Row="0" Grid.Column="2" Padding="12" Stroke="Yellow" StrokeThickness="1">
                 <Border.StrokeShape>
                     <RoundRectangle CornerRadius="12"/>
                 </Border.StrokeShape>
@@ -96,7 +96,7 @@
             </Border>
 
             <!-- Energy -->
-            <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Padding="12" Stroke="Gray" StrokeThickness="1">
+            <Border Grid.Row="1" Grid.Column="0" Padding="12" Stroke="Green" StrokeThickness="1">
                 <Border.StrokeShape>
                     <RoundRectangle CornerRadius="12"/>
                 </Border.StrokeShape>
@@ -106,8 +106,19 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- Power -->
+            <Border Grid.Row="1" Grid.Column="1" Padding="12" Stroke="LightBlue" StrokeThickness="1">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="12"/>
+                </Border.StrokeShape>
+                <VerticalStackLayout>
+                    <Label Text="Power (W)" FontSize="12" Opacity="0.7"/>
+                    <Label x:Name="PowerLabel" Text="0.00" FontSize="20" FontAttributes="Bold"/>
+                </VerticalStackLayout>
+            </Border>
+
             <!-- Power Factor -->
-            <Border Grid.Row="1" Grid.Column="2" Padding="12" Stroke="Gray" StrokeThickness="1">
+            <Border Grid.Row="1" Grid.Column="2" Padding="12" Stroke="Red" StrokeThickness="1">
                 <Border.StrokeShape>
                     <RoundRectangle CornerRadius="12"/>
                 </Border.StrokeShape>

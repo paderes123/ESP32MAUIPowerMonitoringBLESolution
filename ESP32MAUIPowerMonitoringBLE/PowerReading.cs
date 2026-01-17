@@ -17,4 +17,7 @@ public class PowerReading
 
     [JsonPropertyName("powerFactor")]
     public float PowerFactor { get; set; }
+
+    [JsonPropertyName("power")]
+    public float Power { get; set; }
 }

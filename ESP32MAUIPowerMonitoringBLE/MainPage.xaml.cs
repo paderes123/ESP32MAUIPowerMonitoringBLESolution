@@ -10,6 +10,8 @@ namespace ESP32MAUIPowerMonitoringBLE
 {
     public partial class MainPage : ContentPage
     {
+        private int _seconds = 0;
+        
         private readonly IBluetoothLE ble = CrossBluetoothLE.Current;
         private readonly IAdapter adapter = CrossBluetoothLE.Current.Adapter;
 
@@ -72,7 +74,7 @@ namespace ESP32MAUIPowerMonitoringBLE
 
             if (ble.State != BluetoothState.On)
             {
-                await DisplayAlert("Bluetooth", "Please enable Bluetooth", "OK");
+                await DisplayAlertAsync("Bluetooth", "Please enable Bluetooth", "OK");
                 return;
             }
 
@@ -170,7 +172,7 @@ namespace ESP32MAUIPowerMonitoringBLE
                 Debug.WriteLine($"Connection failed: {ex}");
             }
         }
-
+        
         private void OnCharacteristicValueUpdated(object? sender, CharacteristicUpdatedEventArgs e)
         {
             if (e.Characteristic?.Value == null || e.Characteristic.Value.Length == 0)
@@ -195,10 +197,17 @@ namespace ESP32MAUIPowerMonitoringBLE
                         VoltageLabel.Text = reading.Voltage.ToString("F1");
                         CurrentLabel.Text = reading.Current.ToString("F2");
                         FrequencyLabel.Text = reading.Frequency.ToString("F1");
+                        PowerLabel.Text = reading.Power.ToString("F1");
                         EnergyLabel.Text = reading.Energy.ToString("F3");
                         PowerFactorLabel.Text = reading.PowerFactor.ToString("F2");
 
                         StatusLabel.Text = $"Updated {DateTime.Now:T}";
+
+                        _seconds++;
+                        // Update chart
+                        LiveData.Add(new ChartData { Value = _seconds, Size = reading.Power });
+                        if (LiveData.Count > 20) LiveData.RemoveAt(0);
+
                         bleBuffer.Clear(); // no need to buffer if parse succeeded
                         return;
                     }
@@ -213,22 +222,6 @@ namespace ESP32MAUIPowerMonitoringBLE
                     StatusLabel.Text = "Parse error – check debug output";
                 }
             });
-        }
-
-        private async void OnToggleSwitchToggled(object sender, ToggledEventArgs e)
-        {
-            if (characteristic == null) return;
-
-            var cmd = e.Value ? "ON" : "OFF";
-            try
-            {
-                await characteristic.WriteAsync(Encoding.UTF8.GetBytes(cmd));
-                StatusLabel.Text = $"Sent: {cmd}";
-            }
-            catch (Exception ex)
-            {
-                StatusLabel.Text = $"Write error: {ex.Message}";
-            }
         }
 
         private void OnConnectButtonLoaded(object sender, EventArgs e)
